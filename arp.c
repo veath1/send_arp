@@ -36,7 +36,7 @@ typedef struct my_arp
 
 
 int rqarp(pcap_t* handle,char* dev,uint8_t*si,uint8_t*ti);
-int arprp(pcap_t*handle,ether_header*eth,my_arp*mya);
+int arprp(pcap_t*handle,const u_char*packet);
 
 
 void usage() {
@@ -60,23 +60,33 @@ int main(int argc, char* argv[]) {
 		
 		struct pcap_pkthdr* header;
 		const u_char* packet;
+		const u_char* arp_packet;
+		
 		rqarp(handle,dev,argv[2],argv[3]);
-		int res = pcap_next_ex(handle, &header, &packet);
+		
+		
 		while(1){
-			
+			int res = pcap_next_ex(handle, &header, &packet);
+			ether_header*eth1=(ether_header*)packet;
+			my_arp * mya=(my_arp*)(packet+sizeof(ether_header));
 			if (res == 0) continue;
 			if (res == -1 || res == -2) break;
-			ether_header*eth1=(ether_header*)packet;
 			if(ntohs(eth1->Type)==0x0806){
-				my_arp * mya=(my_arp*)(packet+sizeof(ether_header));
 				if(ntohs(mya->my_op)==2 && *(uint32_t*)mya->my_si==inet_addr(argv[2])){
-					puts("haahh");
-					sleep(2);
-					arprp(handle,eth1,mya);
+					puts("arp rp");
+					arp_packet=packet;
+					break;
 					
 				}
 			}
 		}
+
+		while(1){
+						arprp(handle,arp_packet);
+						sleep(1);
+					}
+		
+		
 		
 
 	//while (1) {}
@@ -87,25 +97,25 @@ int main(int argc, char* argv[]) {
 	return 0;
 }
 
-int arprp(pcap_t*handle,ether_header*eth,my_arp*mya){
+int arprp(pcap_t*handle,const u_char*packet){
 
 	
-	uint8_t buf[50]={0,};
-
+		uint8_t buf[60]={0,};
+		my_arp * mya=(my_arp*)(packet+sizeof(ether_header));
 		ether_header*eth1=(ether_header*)buf;
-		memcpy(eth1->DesMac,eth->DesMac ,6);
-		memcpy(eth1->SrcMac,eth->SrcMac,6);
+		memcpy(eth1->SrcMac,mya->my_thwa,6);
+		memcpy(eth1->DesMac,mya->my_shwa ,6);
 		eth1->Type=ntohs(0x0806);
-		my_arp * mya1=(my_arp*)buf+sizeof(ether_header);
+		my_arp * mya1=(my_arp*)(buf+sizeof(ether_header));
 		mya1->my_hwt=htons(1);
 		mya1->my_pro=htons(0x0800);
 		mya1->my_hwln=6;
 		mya1->my_proln=4;
 		mya1->my_op=ntohs(2);
-		memcpy(mya1->my_shwa, eth->SrcMac,6);
-		*(uint32_t*)mya1->my_si=(inet_addr(mya->my_si));
-		memcpy(mya1->my_thwa, eth->DesMac,6);
-		*(uint32_t*)mya1->my_ti=(inet_addr(mya->my_ti));
+		memcpy(mya1->my_shwa, mya->my_thwa,6);
+		*(uint32_t*)mya1->my_si=*(uint32_t*)(mya->my_ti);
+		memcpy(mya1->my_thwa,mya->my_shwa,6);
+		*(uint32_t*)mya1->my_ti=*(uint32_t*)(mya->my_si);
 		pcap_sendpacket(handle,buf,sizeof(ether_header)+sizeof(my_arp));
 		puts("arp reqly done");
 
@@ -114,7 +124,7 @@ int arprp(pcap_t*handle,ether_header*eth,my_arp*mya){
 int rqarp(pcap_t* handle,char* dev,uint8_t*si,uint8_t*ti){
 	struct ifreq s;
     int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
-	uint8_t buf[50]={0,};
+	uint8_t buf[60]={0,};
     strcpy(s.ifr_name, dev);
     if ( ioctl(fd, SIOCGIFHWADDR, &s)==0) {
 		
