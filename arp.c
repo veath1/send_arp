@@ -60,10 +60,10 @@ int main(int argc, char* argv[]) {
 		
 		struct pcap_pkthdr* header;
 		const u_char* packet;
-		
-		while(1){
-			rqarp(handle,dev,argv[2],argv[3]);
+		rqarp(handle,dev,argv[2],argv[3]);
 		int res = pcap_next_ex(handle, &header, &packet);
+		while(1){
+			
 			if (res == 0) continue;
 			if (res == -1 || res == -2) break;
 			ether_header*eth1=(ether_header*)packet;
